@@ -14,53 +14,73 @@ Beschreibung: Main
 #include <Arduino.h>
 #include <Wire.h>
 #include "SSD1306Wire.h"
+
 //#include <driver/adc.h>
 //#include <driver/dac.h>
 
+ 
+
 SSD1306Wire display(0x3c, SDA, SCL);  // ADDRESS, SDA, SCL | 128x64 display
-uint8_t txval = 5;
-uint16_t rxval;
+uint8_t txval = 5;                    // DAC
+uint16_t rxval; 	                    // ADC
+
 float rxvoltage;
-int xdisplay;
+int16_t xdisplay = 0;
+int16_t  ydisplay = 32;
+
 
 void setup()
 {
-    Serial.begin(115200);
-    display.init();
-    display.clear();
-    display.display();
-    //dac_output_enable(DAC_CHANNEL_1); // Kanal 1 auf GPIO 25
-    //dac_output_voltage(DAC_CHANNEL_1, 255); // 255 = 3.3V  | 1.O V
 
-    //adc1_config_width(ADC_WIDTH_BIT_12);
-    //adc1_config_channel_atten(ADC1_CHANNEL_0,ADC_ATTEN_DB_0);
-    
+  Serial.begin(115200);
+
+  // Display initialisieren
+  display.init();
+  display.clear();
+  display.display();   
+
 }
 
+ 
+
 void loop()
+
 {
-    txval = (int) 127*(1+sin(2*PI*millis()/1000)); // sin ist im Bereich [0;2]. Mit *127 wird gesamter 8bit Bereich genutzt. 
-    dacWrite(25,txval);
-    rxval = analogRead(33);
 
-    rxvoltage = float(rxval)/4095*3.3; //ADC ist 12bit, Referenzspannung 3.3V
+  txval = (int) 127*(1+sin(2*PI*millis()/1000)); // sin ist im Bereich [0;2]. Mit *127 wird gesamter 8bit Bereich genutzt.
+  dacWrite(25,txval);
+  rxval = analogRead(33);
 
-    const std::string displaytext = std::to_string(rxvoltage) + " V";
+
+  rxvoltage = float(rxval)/4095*3.3; //ADC ist 12bit, Referenzspannung 3.3V
+
+  const std::string displaytext = std::to_string(rxvoltage) + " V";
+
+  // display.clear();
+
+  if (xdisplay == 128)      // Reset wenn Display voll
+  {
     display.clear();
+    xdisplay = 0;
+    ydisplay = 0;
+  }
 
-    if (xdisplay == 128)    // Reset wenn Display voll
-    {
-        display.clear();
-        xdisplay = 0;
-    }
+  //ydisplay = rxval/4095 * 64;     // Funktioniert nicht
+  //ydisplay = 63 - (rxvoltage/3.3 * 64);      // [63 - ydisplay] für inverstiertes Ergebnis
+  ydisplay = rxvoltage/3.3 * 64;
 
-    display.drawString(0,30, String(displaytext.c_str()));
-    display.display();
-    Serial.printf("DAC: %d ADC: %d Voltage %6.3f\n", txval, rxval, rxvoltage);
-    //Serial.printf((String(displaytext.c_str())).c_str());
+  //display.drawString(0,30, String(displaytext.c_str()));
+  display.setPixel(xdisplay, ydisplay);
+  display.display();
 
-    display.setPixel(xdisplay, rxval/4095*64);  // Sinus auf 64px skalieren und zeichnen
-    xdisplay++;
+  Serial.printf("DAC: %d ADC: %d Voltage %6.3f Y: %d X: %d\n", txval, rxval, rxvoltage, ydisplay, xdisplay);
 
-    delay(15); // 2/128 = 15ms
+  //Serial.printf((String(displaytext.c_str())).c_str());
+
+  xdisplay++;
+
+  //Wenn 2s Anzeige: Wert skalieren und alle 2/128 s aufs display schreiben, bei pixel 128 löschen
+
+  delay(8); // Ändern für Breite des Sinus
+
 }
