@@ -1,3 +1,16 @@
+/*
+EKG Projekt WS 2023
+
+Datum: 01.10.2023
+
+Teammitglieder:
+Tamara SUM
+Johannes WERNER
+
+Beschreibung: Main
+
+*/
+
 #include <Arduino.h>
 #include <Wire.h>
 #include "SSD1306Wire.h"
@@ -30,24 +43,24 @@ void loop()
     dacWrite(25,txval);
     rxval = analogRead(33);
 
-    rxvoltage = float(rxval)/4095*3.3; //ADC ist 12bit, TODO: 2,45V korrekt?
+    rxvoltage = float(rxval)/4095*3.3; //ADC ist 12bit, Referenzspannung 3.3V
 
     const std::string displaytext = std::to_string(rxvoltage) + " V";
     display.clear();
 
-    if (xdisplay == 255)
+    if (xdisplay == 128)    // Reset wenn Display voll
     {
         display.clear();
         xdisplay = 0;
     }
+
     display.drawString(0,30, String(displaytext.c_str()));
     display.display();
     Serial.printf("DAC: %d ADC: %d Voltage %6.3f\n", txval, rxval, rxvoltage);
     //Serial.printf((String(displaytext.c_str())).c_str());
 
-    display.setPixel(xdisplay, rxval);
+    display.setPixel(xdisplay, rxval/4095*64);  // Sinus auf 64px skalieren und zeichnen
     xdisplay++;
 
-    //Wenn 2s Anzeige: Wert skalieren und alle 2/128 s aufs display schreiben, bei pixel 128 löschen
-    delay(200);
+    delay(15); // 2/128 = 15ms
 }
