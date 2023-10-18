@@ -37,6 +37,7 @@ int displayTimeShown = 2;     // Auf Display werden 2s an Daten angezeigt
 
 // Variablen Definition
 std::queue<uint16_t> ringBuffer;
+bool interruptflag = false;
 
 // Ringbuffer für EKG-Daten
 #define BUFFER_SIZE 7500                    // Für 30 Sekunden EKG-Daten bei 250 Hz Abtastung (7,500 = 30s * 250Hz)
@@ -49,9 +50,10 @@ portMUX_TYPE timerMUX = portMUX_INITIALIZER_UNLOCKED;
 //void onTimer()            
 void IRAM_ATTR onTimer()                    // Interrupt Ram Attritube
 {
-  int16_t adcValue = analogRead(ADC_PIN);
-  ekgBuffer[bufferIndex] = adcValue;
-  bufferIndex = (bufferIndex + 1) % BUFFER_SIZE;
+  //int16_t adcValue = analogRead(ADC_PIN);
+  //ekgBuffer[bufferIndex] = adcValue;
+  //bufferIndex = (bufferIndex + 1) % BUFFER_SIZE;
+  interruptflag = true;
 
   // Hier können Sie Code hinzufügen, um Daten auf GPIO 25 zu schreiben (WRITE_PIN).
   // Zum Beispiel digitalWrite(WRITE_PIN, HIGH) für eine bestimmte Bedingung.
@@ -68,10 +70,15 @@ void setup()
 
   // Timer                                                        // https://github.com/pcbreflux/espressif/blob/master/esp32/arduino/sketchbook/ESP32_simpletimer/ESP32_simpletimer.ino
   Serial.println("Start Timer");                                  // Debug
+  //Serial.println(interruptdelay);
   timer = timerBegin(0, 80, true);                                // MWDT clock period = 12.5 ns * TIMGn_Tx_WDT_CLK_PRESCALE -> 12.5 ns * 80 -> 1000 ns = 1 us, countUp
+  Serial.println("Attach interrupt");
   timerAttachInterrupt(timer, &onTimer, true);                    // edge (not level) triggered
-  timerAlarmWrite(timer, (1/samplingFreq)*1000, true);            // 1000 * 1 us = 1 ms, autoreload true
+  Serial.println("Alarm Write");
+  timerAlarmWrite(timer, (uint64_t)(1000000 / samplingFreq), true);            // 1000 * 1 us = 1 ms, autoreload true
+  Serial.println("Enable timer");
   timerAlarmEnable(timer);                                        // enable
+  Serial.println("End setup");
 }
 
 
