@@ -12,9 +12,10 @@ Beschreibung: Main
 */
 #include <iostream>
 #include <Arduino.h>
-#include <Wire.h>
+//#include <Wire.h>   // Wird wohl seit 1.6.5 nicht mehr benötigt
 #include "SSD1306Wire.h"
 #include <queue>  // Für Ringbuffer
+#include "pics.h"
 // using namespace std;
 
 //#include <driver/adc.h>
@@ -100,7 +101,12 @@ void setup()
   // Display initialisieren
   display.init();
   display.clear();
+  display.display();
+/*
+  display.drawXbm(20, 0, 28, 64, WiFi_Logo_bits);    // 28 64
   display.display(); 
+  delay(5000);
+  display.clear();*/
 
   // TimerInterrupt                                                             // https://github.com/pcbreflux/espressif/blob/master/esp32/arduino/sketchbook/ESP32_simpletimer/ESP32_simpletimer.ino
   Serial.println("Start Timer");                                        // Debug
