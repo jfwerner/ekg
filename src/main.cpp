@@ -14,14 +14,28 @@ Beschreibung: Main
 #include <Arduino.h>
 //#include <Wire.h>   // Wird wohl seit 1.6.5 nicht mehr benötigt
 #include "SSD1306Wire.h"
+#include "WiFi.h"
 #include <queue>  // Für Ringbuffer
 #include "pics.h"
 // using namespace std;
 
+// TEstfunktion
+uint8_t txval = 5;                    // DAC - Simuliert EKG Signal
+uint16_t rxval; 	                    // ADC
+
+int delayvalue = 0;                          // Index wie viel Werte für die Ausgabe übersprungen werden
+// Werte festlegen
+int samplingFreq = 250;                      // Abtastfrequenz ADC https://pubmed.ncbi.nlm.nih.gov/30109153/
+int displayTimeShown = 2;                    // Auf Display werden 2s an Daten angezeigt
+
+
+
+
 //#include <driver/adc.h>
 //#include <driver/dac.h>
-
-SSD1306Wire display(0x3c, SDA, SCL);  // ADDRESS, SDA, SCL | 128x64 display https://github.com/ThingPulse/esp8266-oled-ssd1306
+WiFiServer server(80);      // HTML Webserver
+const char* ssid = "Blumentopferde";
+const char* password = "67630221141274596083";
 
 // ADC-Konfiguration
 #define ADC_PIN 33 // Pin für EKG-Signal
@@ -32,14 +46,9 @@ SSD1306Wire display(0x3c, SDA, SCL);  // ADDRESS, SDA, SCL | 128x64 display http
 // GPIO-Pin zum Schreiben
 #define DAC_PIN 25
 
-
-// TEstfunktion
-uint8_t txval = 5;                    // DAC - Simuliert EKG Signal
-uint16_t rxval; 	                    // ADC
-
 float rxvoltage;
-int16_t xdisplay = 0;
-int16_t  ydisplay = 32;
+
+SSD1306Wire display(0x3c, SDA, SCL);  // ADDRESS, SDA, SCL | 128x64 display https://github.com/ThingPulse/esp8266-oled-ssd1306
 
 struct myPixel                              // Pixels for use with Display
 {
@@ -50,15 +59,8 @@ struct myPixel                              // Pixels for use with Display
 myPixel lastpx;
 myPixel displaypx;
 
-int delayvalue = 0;                          // Index wie viel Werte für die Ausgabe übersprungen werden
-
-// Werte festlegen
-int samplingFreq = 250;                      // Abtastfrequenz ADC https://pubmed.ncbi.nlm.nih.gov/30109153/
-int displayTimeShown = 2;                    // Auf Display werden 2s an Daten angezeigt
-
 // Variablen Definition
 std::queue<uint16_t> ringBuffer;
-
 
 // Ringbuffer für EKG-Daten
 #define BUFFER_SIZE 7500                    // Für 30 Sekunden EKG-Daten bei 250 Hz Abtastung (7,500 = 30s * 250Hz)
@@ -91,8 +93,6 @@ void IRAM_ATTR onTimer()                    // Interrupt Ram Attritube
 void setup()
 {
   Serial.begin(115200);
-
-
   // Initialisierung PINS
   //pinMode(33, INPUT);     // sets the digital pin 33 as input
   //pinMode(25, OUTPUT);    // sets the digital pin 25 as output
@@ -108,7 +108,26 @@ void setup()
   delay(5000);
   display.clear();*/
 
-  // TimerInterrupt                                                             // https://github.com/pcbreflux/espressif/blob/master/esp32/arduino/sketchbook/ESP32_simpletimer/ESP32_simpletimer.ino
+  WiFi.mode(WIFI_STA);    // Connect to AP 
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Verbindung zum WLAN-Netzwerk wird hergestellt...");
+    delay(1000);
+    if (millis() > 30*1000) {
+      Serial.println("Verbindung fehlgeschlagen! ESP wird neugestartet");
+      display.drawString(0, 0, "Verbindung fehlgeschlagen! ESP wird neugestartet");
+      display.display();
+      delay(3000);
+      ESP.restart();
+    }
+  }
+  Serial.println("Verbindung zum WLAN-Netzwerk hergestellt");
+  display.drawString(0, 0, "Verbindung hergestellt");
+  display.display();
+  delay(3000);
+  display.clear();
+
+  // TimerInterrupt                                                     // https://github.com/pcbreflux/espressif/blob/master/esp32/arduino/sketchbook/ESP32_simpletimer/ESP32_simpletimer.ino
   Serial.println("Start Timer");                                        // Debug
   //Serial.println(interruptdelay);
   timer = timerBegin(0, 80, true);                                      // MWDT clock period = 12.5 ns * TIMGn_Tx_WDT_CLK_PRESCALE -> 12.5 ns * 80 -> 1000 ns = 1 us, countUp
@@ -124,7 +143,7 @@ void loop()
   Serial.println("Interrupt Loop");
   if (interruptflag)
   {
-    
+    // Do display stuff, maybe?
   }
 
 
