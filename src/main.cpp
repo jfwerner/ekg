@@ -1,22 +1,24 @@
 /*
 EKG Projekt WS 2023
 
-Datum: 01.10.2023
+Start: 01.10.2023
+Ende: 14.11.2023
 
 Teammitglieder:
 Tamara SUM          73319
-Johannes WERNER
+Johannes WERNER     73431
 
 Beschreibung: Main
 
 */
 #include <iostream>
 #include <Arduino.h>
-//#include <Wire.h>   // Wird wohl seit 1.6.5 nicht mehr benötigt
+//#include <Wire.h>       // Wird wohl seit 1.6.5 nicht mehr benötigt
 #include "SSD1306Wire.h"
+#include <WiFiUdp.h>
 #include "WiFi.h"
-#include <queue>  // Für Ringbuffer
-#include "pics.h"
+#include <queue>          // Für Ringbuffer
+#include "logo.h"         // HKA Logo
 // using namespace std;
 
 // Testfunktion
@@ -34,6 +36,9 @@ int displayTimeShown = 2;                    // Auf Display werden 2s an Daten a
 //#include <driver/adc.h>
 //#include <driver/dac.h>
 WiFiServer server(80);      // HTML Webserver
+#define UDP_PORT 420
+WiFiUDP UDP;
+char packet[255];
 //const char* ssid = "Blumentopferde";
 //const char* password = "67630221141274596083";
 
@@ -99,7 +104,7 @@ void setup()
   // Initialisierung PINS
   //pinMode(33, INPUT);     // sets the digital pin 33 as input
   //pinMode(25, OUTPUT);    // sets the digital pin 25 as output
-  pinMode(26, OUTPUT);    // sets the digital pin 26 as output
+  //pinMode(26, OUTPUT);    // sets the digital pin 26 as output
 
   // Display initialisieren
   display.init();
@@ -115,12 +120,13 @@ void setup()
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     Serial.println("Verbindung zum WLAN-Netzwerk wird hergestellt...");
-    display.drawString(0, 0, "Verbindung zum WLAN-Netzwerk wird hergestellt...");
+    display.drawString(2, 2, "Verbindung zum WLAN");
+    display.drawString(2, 15, "wird hergestellt...");
     display.display();
     delay(1000);
     if (millis() > 30*1000) {
       Serial.println("Verbindung fehlgeschlagen! ESP wird neugestartet");
-      display.drawString(0, 0, "Verbindung fehlgeschlagen! ESP wird neugestartet");
+      display.drawString(0, 0, "Fehler, Neustart!");
       display.display();
       delay(3000);
       ESP.restart();
@@ -128,10 +134,17 @@ void setup()
   }
   Serial.println("Verbindung zum WLAN-Netzwerk hergestellt");
   display.drawString(0, 0, "Verbindung hergestellt");
-  Serial.println("UDP server IP: ", WiFi.localIP());
-  display.drawString(0, 20, "IP:", WiFi.localIP());
   display.display();
-  delay(3000);
+
+  UDP.begin(UDP_PORT);
+  //Serial.printf("UDP server IP:", String(WiFi.localIP()).c_str());
+  display.clear();
+  display.drawString(0,0, "IP-Address (local):");
+  display.drawString(0,15, WiFi.localIP().toString());            
+  //display.drawString(0,30, "Portnumber (local):" + String(std::to_string(UDP_PORT)));
+  display.drawString(0,45, (String) UDP_PORT);
+  display.display();
+  delay(5000);
   display.clear();
 
   // TimerInterrupt                                                     // https://github.com/pcbreflux/espressif/blob/master/esp32/arduino/sketchbook/ESP32_simpletimer/ESP32_simpletimer.ino
@@ -178,5 +191,27 @@ void loop()
       displaypx.x = 0;
     }
     delayvalue = 0;
+  }
+
+  int packetSize = UDP.parsePacket();
+  if (packetSize) {
+    Serial.print("Received packet! Size: ");
+    Serial.println(packetSize); 
+    int len = UDP.read(packet, 255);
+    if (len > 0)
+    {
+      packet[len] = '\0';
+    }
+    Serial.println(packet);
+    UDP.beginPacket(UDP.remoteIP(), UDP.remotePort());
+    char reply[] = "received";
+    std::string replly = "received";
+    for (int i = 0; i<8; i++)
+    {
+      //UDP.write(char(reply[i]));
+    }
+    UDP.write(10);
+    //UDP.write(replly.c_str(),replly.length());
+    UDP.endPacket();
   }
 }
