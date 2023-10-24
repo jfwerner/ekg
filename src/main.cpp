@@ -19,11 +19,11 @@ Beschreibung: Main
 #include "pics.h"
 // using namespace std;
 
-// TEstfunktion
+// Testfunktion
 uint8_t txval = 5;                    // DAC - Simuliert EKG Signal
 uint16_t rxval; 	                    // ADC
 
-int delayvalue = 0;                          // Index wie viel Werte für die Ausgabe übersprungen werden
+int delayvalue = 0;                          // Index für wie viel Werte für die Ausgabe übersprungen werden
 // Werte festlegen
 int samplingFreq = 250;                      // Abtastfrequenz ADC https://pubmed.ncbi.nlm.nih.gov/30109153/
 int displayTimeShown = 2;                    // Auf Display werden 2s an Daten angezeigt
@@ -34,8 +34,11 @@ int displayTimeShown = 2;                    // Auf Display werden 2s an Daten a
 //#include <driver/adc.h>
 //#include <driver/dac.h>
 WiFiServer server(80);      // HTML Webserver
-const char* ssid = "Blumentopferde";
-const char* password = "67630221141274596083";
+//const char* ssid = "Blumentopferde";
+//const char* password = "67630221141274596083";
+
+const char* ssid = "FRITZ!Box 7590 VL";
+const char* password = "56616967766283031728";
 
 // ADC-Konfiguration
 #define ADC_PIN 33 // Pin für EKG-Signal
@@ -80,7 +83,7 @@ void IRAM_ATTR onTimer()                    // Interrupt Ram Attritube
   //bufferIndex = (bufferIndex + 1) % BUFFER_SIZE;
   
   interruptflag = true;
-
+  delayvalue++;
   digitalWrite(26, HIGH);                  // sets the digital pin 26 on
   ringBuffer.push(analogRead(ADC_PIN));     // Read analog signal and write to buffer
   interruptflag = false;                    // Reset interrupt flag
@@ -112,6 +115,8 @@ void setup()
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     Serial.println("Verbindung zum WLAN-Netzwerk wird hergestellt...");
+    display.drawString(0, 0, "Verbindung zum WLAN-Netzwerk wird hergestellt...");
+    display.display();
     delay(1000);
     if (millis() > 30*1000) {
       Serial.println("Verbindung fehlgeschlagen! ESP wird neugestartet");
@@ -123,6 +128,8 @@ void setup()
   }
   Serial.println("Verbindung zum WLAN-Netzwerk hergestellt");
   display.drawString(0, 0, "Verbindung hergestellt");
+  Serial.println("UDP server IP: ", WiFi.localIP());
+  display.drawString(0, 20, "IP:", WiFi.localIP());
   display.display();
   delay(3000);
   display.clear();
@@ -140,26 +147,16 @@ void setup()
 
 void loop()
 {
-  Serial.println("Interrupt Loop");
-  if (interruptflag)
-  {
-    // Do display stuff, maybe?
-  }
-
+  //Serial.println("Interrupt Loop");
+  //if (interruptflag)
+  //{ }
 
   txval = (int) 127*(1+sin(2*PI*millis()/1000)); // sin ist im Bereich [0;2]. Mit *127 wird gesamter 8bit Bereich genutzt.
   dacWrite(DAC_PIN, txval);
-  
 
-  if (displaypx.x == 128)             // Reset x coordinate to start of the display
-  {
-    display.clear();
-    lastpx.x = 0;
-    displaypx.x = 0;
-  }
-  
   if (delayvalue >= 5)      // Display every xth value
   {
+  
     rxval = analogRead(ADC_PIN);
 
     rxvoltage = float(rxval)/4095*3.3; //ADC ist 12bit,
@@ -173,7 +170,13 @@ void loop()
     lastpx = displaypx;     // Save last coordinates for line drawing
     
     displaypx.x++;
+    
+    if (displaypx.x == 128)             // Reset x coordinate to start of the display
+    {
+      display.clear();
+      lastpx.x = 0;
+      displaypx.x = 0;
+    }
     delayvalue = 0;
   }
-  delayvalue++;
 }
