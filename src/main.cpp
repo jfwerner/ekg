@@ -31,17 +31,13 @@ int samplingFreq = 250;                      // Abtastfrequenz ADC https://pubme
 int displayTimeShown = 2;                    // Auf Display werden 2s an Daten angezeigt
 
 
-
-
-//#include <driver/adc.h>
-//#include <driver/dac.h>
 WiFiServer server(80);      // HTML Webserver
 #define UDP_PORT 420
 WiFiUDP UDP;
 char packet[255];
+
 //const char* ssid = "Blumentopferde";
 //const char* password = "67630221141274596083";
-
 const char* ssid = "FRITZ!Box 7590 VL";
 const char* password = "56616967766283031728";
 
@@ -64,11 +60,19 @@ struct myPixel                              // Pixels for use with Display
   int16_t y = 0;
 };
 
+struct udpPacket
+{
+  uint8_t highByte;
+  uint8_t lowByte;
+  uint8_t dataPosition;
+};
+
 myPixel lastpx;
 myPixel displaypx;
 
 // Variablen Definition
 std::queue<uint16_t> ringBuffer;
+
 
 // Ringbuffer für EKG-Daten
 #define BUFFER_SIZE 7500                    // Für 30 Sekunden EKG-Daten bei 250 Hz Abtastung (7,500 = 30s * 250Hz)
@@ -157,19 +161,10 @@ void setup()
   Serial.println("End setup");
 }
 
-
-void loop()
+bool displaySignal()
 {
-  //Serial.println("Interrupt Loop");
-  //if (interruptflag)
-  //{ }
-
-  txval = (int) 127*(1+sin(2*PI*millis()/1000)); // sin ist im Bereich [0;2]. Mit *127 wird gesamter 8bit Bereich genutzt.
-  dacWrite(DAC_PIN, txval);
-
   if (delayvalue >= 5)      // Display every xth value
   {
-  
     rxval = analogRead(ADC_PIN);
 
     rxvoltage = float(rxval)/4095*3.3; //ADC ist 12bit,
@@ -192,7 +187,10 @@ void loop()
     }
     delayvalue = 0;
   }
+}
 
+bool receiveUDP()
+{
   int packetSize = UDP.parsePacket();
   if (packetSize) {
     Serial.print("Received packet! Size: ");
@@ -203,15 +201,54 @@ void loop()
       packet[len] = '\0';
     }
     Serial.println(packet);
-    UDP.beginPacket(UDP.remoteIP(), UDP.remotePort());
-    char reply[] = "received";
-    std::string replly = "received";
-    for (int i = 0; i<8; i++)
-    {
-      //UDP.write(char(reply[i]));
-    }
-    UDP.write(10);
-    //UDP.write(replly.c_str(),replly.length());
-    UDP.endPacket();
+    return true;
   }
+  return false;
+}
+
+bool sendAnswer()
+{
+  UDP.beginPacket(UDP.remoteIP(), UDP.remotePort());
+  char reply[] = "received";
+  std::string replly = "received";
+  for (int i = 0; i<8; i++)
+  {
+    //UDP.write(char(reply[i]));
+  }
+  UDP.write(10);
+  //UDP.write(replly.c_str(),replly.length());
+  if (UDP.endPacket())
+    return true;
+
+  return false;
+}
+
+bool ekg2packet(int pos, udpPacket& packet)
+{
+  packet.dataPosition = pos;
+  packet.highByte = (ringBuffer.front() >> 8) & 0xFF;
+  packet.lowByte = ringBuffer.front() & 0xFF;
+  ringBuffer.pop();
+}
+
+bool sendEKGdata()
+{
+  
+}
+
+
+void loop()
+{
+  //Serial.println("Interrupt Loop");
+  //if (interruptflag)
+  //{ }
+
+  txval = (int) 127*(1+sin(2*PI*millis()/1000)); // sin ist im Bereich [0;2]. Mit *127 wird gesamter 8bit Bereich genutzt.
+  dacWrite(DAC_PIN, txval);
+  
+  ringBuffer.push(23);
+  displaySignal();
+
+  if (receiveUDP())
+    sendEKGdata();
 }
