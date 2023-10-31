@@ -17,7 +17,7 @@ Beschreibung: Main
 #include "SSD1306Wire.h"
 #include <WiFiUdp.h>
 #include "WiFi.h"
-#include <queue>          // Für Ringbuffer
+//#include <queue>          // Für Ringbuffer
 #include "logo.h"         // HKA Logo
 // using namespace std;
 
@@ -71,13 +71,21 @@ myPixel lastpx;
 myPixel displaypx;
 
 // Variablen Definition
-std::queue<uint16_t> ringBuffer;
 
 
 // Ringbuffer für EKG-Daten
 #define BUFFER_SIZE 7500                    // Für 30 Sekunden EKG-Daten bei 250 Hz Abtastung (7,500 = 30s * 250Hz)
-volatile int16_t ekgBuffer[BUFFER_SIZE];
-volatile uint16_t bufferIndex = 0;
+uint16_t ekgBuffer[BUFFER_SIZE];            // volatile ?
+//uint16_t bufferIndex = 0;
+
+uint16_t * begin = &ekgBuffer[0];
+uint16_t * middle = &ekgBuffer[BUFFER_SIZE/2];
+
+
+uint16_t * writeptr = begin;
+uint16_t * readptr = begin;
+
+//bool readAwriteB;
 
 // Interrupt
 bool interruptflag = false;
@@ -94,9 +102,8 @@ void IRAM_ATTR readADC()                    // Interrupt Ram Attritube
   delayvalue++;
   //digitalWrite(26, HIGH);                  // sets the digital pin 26 on
 
-  ringBuffer.push(analogRead(ADC_PIN));     // Read analog signal and write to buffer
-  //ekgBuffer[bufferIndex]=analogRead(ADC_PIN);
-  bufferIndex++;
+  *writeptr = analogRead(ADC_PIN); // Read analog signal and write to buffer
+  writeptr++;
   //interruptflag = false;                    // Reset interrupt flag
   //digitalWrite(26, LOW);                   // sets the digital pin 26 off
 }
@@ -159,18 +166,13 @@ void setup()
   Serial.println("End setup");
 }
 
-
 bool displaySignal()
 {
-
-  rxvoltage = float(ringBuffer.front())/4095*3.3; //ADC ist 12bit,
-  ringBuffer.pop();
+  rxvoltage = float(ekgBuffer[* writeptr])/4095*3.3; //ADC ist 12bit,
 
   if (delayvalue >= 5)      // Display every xth value
   {
     //uint16_t rxval = analogRead(ADC_PIN);
-  
-    //rxvoltage = float(ekgBuffer[0])/4095*3.3; //ADC ist 12bit,
 
     displaypx.y = rxvoltage/3.3 * 64;   // Convert read data into display space
 
@@ -193,7 +195,6 @@ bool displaySignal()
   }
   return false;
 }
-
 
 bool receiveUDP()
 {
@@ -231,35 +232,44 @@ bool sendAnswer()
   return false;
 }
 
-bool ekg2packet(udpPacket& packet)
+bool swapBuffers()
 {
-  //packet.dataPosition = pos;
-  packet.highByte = (ringBuffer.front() >> 8) & 0xFF;
-  packet.lowByte = ringBuffer.front() & 0xFF;
-  ringBuffer.pop();
+  if (writeptr == &ekgBuffer[BUFFER_SIZE])
+  {
+    writeptr = begin;
+  }
+  if (readptr == &ekgBuffer[BUFFER_SIZE])
+  {
+    readptr = begin;
+  }
+  else
+    return false;
   return true;
 }
 
 bool sendEKGdata()
 {
-  UDP.beginPacket(UDP.remoteIP(), UDP.remotePort());
-  udpPacket mPacket;
+    UDP.beginPacket(UDP.remoteIP(), UDP.remotePort());
   
-  while (!ringBuffer.empty())
+  if (writeptr == middle || writeptr == begin )
   {
-    ekg2packet(mPacket);
+    UDP.write((uint8_t*)readptr, (BUFFER_SIZE/2));
+    readptr = readptr + BUFFER_SIZE/2;
+  }
+  
+  swapBuffers();
+/*
     UDP.write(mPacket.highByte);
     Serial.println("Sending high and low byte: ");
     UDP.write(mPacket.lowByte);
     Serial.println(mPacket.highByte);
-    Serial.println(mPacket.lowByte);
-  }
+    Serial.println(mPacket.lowByte);*/
   
+
   UDP.endPacket();
   Serial.println("Sent");
   return true;
 }
-
 
 void loop()
 {
