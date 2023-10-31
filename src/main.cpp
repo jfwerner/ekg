@@ -23,7 +23,7 @@ Beschreibung: Main
 
 // Testfunktion
 uint8_t txval = 5;                    // DAC - Simuliert EKG Signal
-uint16_t rxval; 	                    // ADC
+//uint16_t rxval; 	                    // ADC
 
 int delayvalue = 0;                          // Index für wie viel Werte für die Ausgabe übersprungen werden
 // Werte festlegen
@@ -84,8 +84,7 @@ bool interruptflag = false;
 hw_timer_t * timer = NULL;
 //portMUX_TYPE timerMUX = portMUX_INITIALIZER_UNLOCKED;
 
-//void onTimer()            
-void IRAM_ATTR onTimer()                    // Interrupt Ram Attritube
+void IRAM_ATTR readADC()                    // Interrupt Ram Attritube
 {
   //int16_t adcValue = analogRead(ADC_PIN);
   //ekgBuffer[bufferIndex] = adcValue;
@@ -93,13 +92,13 @@ void IRAM_ATTR onTimer()                    // Interrupt Ram Attritube
   
   interruptflag = true;
   delayvalue++;
-  digitalWrite(26, HIGH);                  // sets the digital pin 26 on
-  ringBuffer.push(analogRead(ADC_PIN));     // Read analog signal and write to buffer
-  interruptflag = false;                    // Reset interrupt flag
-  digitalWrite(26, LOW);                   // sets the digital pin 26 off
+  //digitalWrite(26, HIGH);                  // sets the digital pin 26 on
 
-  // Hier können Sie Code hinzufügen, um Daten auf GPIO 25 zu schreiben (WRITE_PIN).
-  // Zum Beispiel digitalWrite(WRITE_PIN, HIGH) für eine bestimmte Bedingung.
+  ringBuffer.push(analogRead(ADC_PIN));     // Read analog signal and write to buffer
+  //ekgBuffer[bufferIndex]=analogRead(ADC_PIN);
+  bufferIndex++;
+  //interruptflag = false;                    // Reset interrupt flag
+  //digitalWrite(26, LOW);                   // sets the digital pin 26 off
 }
 
 void setup()
@@ -107,8 +106,7 @@ void setup()
   Serial.begin(115200);
   // Initialisierung PINS
   //pinMode(33, INPUT);     // sets the digital pin 33 as input
-  //pinMode(25, OUTPUT);    // sets the digital pin 25 as output
-  //pinMode(26, OUTPUT);    // sets the digital pin 26 as output
+  // GPIO 17 auf High
 
   // Display initialisieren
   display.init();
@@ -155,19 +153,24 @@ void setup()
   Serial.println("Start Timer");                                        // Debug
   //Serial.println(interruptdelay);
   timer = timerBegin(0, 80, true);                                      // MWDT clock period = 12.5 ns * TIMGn_Tx_WDT_CLK_PRESCALE -> 12.5 ns * 80 -> 1000 ns = 1 us, countUp
-  timerAttachInterrupt(timer, &onTimer, true);                          // edge (not level) triggered
+  timerAttachInterrupt(timer, &readADC, true);                          // edge (not level) triggered
   timerAlarmWrite(timer, (uint64_t)(1000*1000 / samplingFreq), true);   // 1000 * 1 us = 1 ms, autoreload true   // 1/250=0 !!!! int division
   timerAlarmEnable(timer);                                              // Timer enable
   Serial.println("End setup");
 }
 
+
 bool displaySignal()
 {
+
+  rxvoltage = float(ringBuffer.front())/4095*3.3; //ADC ist 12bit,
+  ringBuffer.pop();
+
   if (delayvalue >= 5)      // Display every xth value
   {
-    rxval = analogRead(ADC_PIN);
-
-    rxvoltage = float(rxval)/4095*3.3; //ADC ist 12bit,
+    //uint16_t rxval = analogRead(ADC_PIN);
+  
+    //rxvoltage = float(ekgBuffer[0])/4095*3.3; //ADC ist 12bit,
 
     displaypx.y = rxvoltage/3.3 * 64;   // Convert read data into display space
 
@@ -186,8 +189,11 @@ bool displaySignal()
       displaypx.x = 0;
     }
     delayvalue = 0;
+    return true;
   }
+  return false;
 }
+
 
 bool receiveUDP()
 {
@@ -209,46 +215,63 @@ bool receiveUDP()
 bool sendAnswer()
 {
   UDP.beginPacket(UDP.remoteIP(), UDP.remotePort());
-  char reply[] = "received";
+  /*char reply[] = "received";
   std::string replly = "received";
   for (int i = 0; i<8; i++)
   {
     //UDP.write(char(reply[i]));
   }
   UDP.write(10);
-  //UDP.write(replly.c_str(),replly.length());
+  //UDP.write(replly.c_str(),replly.length());*/
+  //UDP.write(10);
+  UDP.printf("received");
   if (UDP.endPacket())
     return true;
 
   return false;
 }
 
-bool ekg2packet(int pos, udpPacket& packet)
+bool ekg2packet(udpPacket& packet)
 {
-  packet.dataPosition = pos;
+  //packet.dataPosition = pos;
   packet.highByte = (ringBuffer.front() >> 8) & 0xFF;
   packet.lowByte = ringBuffer.front() & 0xFF;
   ringBuffer.pop();
+  return true;
 }
 
 bool sendEKGdata()
 {
+  UDP.beginPacket(UDP.remoteIP(), UDP.remotePort());
+  udpPacket mPacket;
   
+  while (!ringBuffer.empty())
+  {
+    ekg2packet(mPacket);
+    UDP.write(mPacket.highByte);
+    Serial.println("Sending high and low byte: ");
+    UDP.write(mPacket.lowByte);
+    Serial.println(mPacket.highByte);
+    Serial.println(mPacket.lowByte);
+  }
+  
+  UDP.endPacket();
+  Serial.println("Sent");
+  return true;
 }
 
 
 void loop()
 {
-  //Serial.println("Interrupt Loop");
-  //if (interruptflag)
-  //{ }
-
   txval = (int) 127*(1+sin(2*PI*millis()/1000)); // sin ist im Bereich [0;2]. Mit *127 wird gesamter 8bit Bereich genutzt.
   dacWrite(DAC_PIN, txval);
-  
-  ringBuffer.push(23);
-  displaySignal();
 
-  if (receiveUDP())
-    sendEKGdata();
+  if (interruptflag)
+  { 
+    displaySignal();
+    if (receiveUDP())
+      sendEKGdata();
+    interruptflag = false;
+  }
+  
 }
