@@ -36,8 +36,8 @@ WiFiServer server(80);      // HTML Webserver
 WiFiUDP UDP;
 char packet[255];
 
-//const char* ssid = "Blumentopferde";
-//const char* password = "67630221141274596083";
+//const char* ssid = "Loading...";
+//const char* password = "";
 const char* ssid = "FRITZ!Box 7590 VL";
 const char* password = "56616967766283031728";
 
@@ -83,13 +83,15 @@ uint16_t * middle = &ekgBuffer[BUFFER_SIZE/2];
 
 
 uint16_t * writeptr = begin;
-uint16_t * readptr = begin;
+uint16_t * displayptr = begin;
+uint16_t * sendptr = begin;
 
 //bool readAwriteB;
 
 // Interrupt
 bool interruptflag = false;
 hw_timer_t * timer = NULL;
+bool readytosend = false;
 //portMUX_TYPE timerMUX = portMUX_INITIALIZER_UNLOCKED;
 
 void IRAM_ATTR readADC()                    // Interrupt Ram Attritube
@@ -125,6 +127,8 @@ void setup()
   delay(5000);
   display.clear();*/
 
+  ///////////////////////////////////////////////////////////////////////////
+  // Netzwerkverbindung
   WiFi.mode(WIFI_STA);    // Connect to AP 
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -153,11 +157,14 @@ void setup()
   //display.drawString(0,30, "Portnumber (local):" + String(std::to_string(UDP_PORT)));
   display.drawString(0,45, (String) UDP_PORT);
   display.display();
+  Serial.printf("IP: %s\n", (String) WiFi.localIP().toString());
+  Serial.printf("Port: %s\n", (String) UDP_PORT);
   delay(5000);
   display.clear();
 
+  ///////////////////////////////////////////////////////////////////////////
   // TimerInterrupt                                                     // https://github.com/pcbreflux/espressif/blob/master/esp32/arduino/sketchbook/ESP32_simpletimer/ESP32_simpletimer.ino
-  Serial.println("Start Timer");                                        // Debug
+  Serial.println("\nStart Timer");                                        // Debug
   //Serial.println(interruptdelay);
   timer = timerBegin(0, 80, true);                                      // MWDT clock period = 12.5 ns * TIMGn_Tx_WDT_CLK_PRESCALE -> 12.5 ns * 80 -> 1000 ns = 1 us, countUp
   timerAttachInterrupt(timer, &readADC, true);                          // edge (not level) triggered
@@ -168,8 +175,8 @@ void setup()
 
 bool displaySignal()
 {
-  rxvoltage = float(ekgBuffer[* writeptr])/4095*3.3; //ADC ist 12bit,
-
+  rxvoltage = float(*displayptr)/4095*3.3; //ADC ist 12bit,
+  displayptr++;
   if (delayvalue >= 5)      // Display every xth value
   {
     //uint16_t rxval = analogRead(ADC_PIN);
@@ -199,7 +206,7 @@ bool displaySignal()
 bool receiveUDP()
 {
   int packetSize = UDP.parsePacket();
-  if (packetSize) {
+  if (packetSize > 0) {
     Serial.print("Received packet! Size: ");
     Serial.println(packetSize); 
     int len = UDP.read(packet, 255);
@@ -225,22 +232,36 @@ bool sendAnswer()
   UDP.write(10);
   //UDP.write(replly.c_str(),replly.length());*/
   //UDP.write(10);
-  UDP.printf("received");
+  UDP.printf("\nreceived");
   if (UDP.endPacket())
     return true;
 
   return false;
 }
 
-bool swapBuffers()
+bool swapBuffers()      // Setzt pointer zurück, sobald sie das Ende erreicht haben
 {
-  if (writeptr == &ekgBuffer[BUFFER_SIZE])
+  if (writeptr == &ekgBuffer[2*BUFFER_SIZE])
   {
+    Serial.printf("\nWriteptr before Reset %d", (writeptr - ekgBuffer)/sizeof(uint16_t));
+    Serial.printf("\nDisplayptr: %d ", (displayptr - ekgBuffer)/sizeof(uint16_t));
     writeptr = begin;
+    Serial.println("\nReset writeptr\n");
   }
-  if (readptr == &ekgBuffer[BUFFER_SIZE])
+  if (displayptr == &ekgBuffer[2*BUFFER_SIZE])    // Kann writeptr nicht überholen, weil er nur beim Interrupt aufgerufen wird
   {
-    readptr = begin;
+    Serial.printf("\nDisplayptr before Reset %d", (displayptr-ekgBuffer)/sizeof(uint16_t));
+    Serial.printf("\nWriteptr: %d", (writeptr-ekgBuffer)/sizeof(uint16_t));
+    displayptr = begin;
+    Serial.println("\nReset displayptr\n");
+  }
+  if (sendptr == &ekgBuffer[2*BUFFER_SIZE])   // Check wird in der Sendefunktion gemacht
+  {
+    
+    Serial.printf("\nSendptr before Reset %d ", (sendptr-ekgBuffer)/sizeof(uint16_t));
+    Serial.printf("\nWriteptr: %d", (writeptr-ekgBuffer)/sizeof(uint16_t));
+    sendptr = begin;
+    Serial.println("\nReset sendptr\n");
   }
   else
     return false;
@@ -249,25 +270,20 @@ bool swapBuffers()
 
 bool sendEKGdata()
 {
-    UDP.beginPacket(UDP.remoteIP(), UDP.remotePort());
+  //UDP.parsePacket();
+  UDP.beginPacket(UDP.remoteIP(), UDP.remotePort());
   
-  if (writeptr == middle || writeptr == begin )
+  if (writeptr == middle || writeptr == begin)   // Passt == begin? Oder == BUFFERSIZE?
   {
-    UDP.write((uint8_t*)readptr, (BUFFER_SIZE/2));
-    readptr = readptr + BUFFER_SIZE/2;
+    Serial.printf("\nBuffer wird gesendet\nSendptr Stelle %d" , (sendptr-ekgBuffer)/sizeof(uint16_t));
+    Serial.printf("\nWriteptr Stelle %d\n", (writeptr-ekgBuffer)/sizeof(uint16_t));
+
+    UDP.write((uint8_t*)sendptr, BUFFER_SIZE);  // Hälfte des Buffers schicken (8 bit) -> 3750 Werte
+    sendptr = sendptr + BUFFER_SIZE/2;
   }
   
-  swapBuffers();
-/*
-    UDP.write(mPacket.highByte);
-    Serial.println("Sending high and low byte: ");
-    UDP.write(mPacket.lowByte);
-    Serial.println(mPacket.highByte);
-    Serial.println(mPacket.lowByte);*/
-  
-
   UDP.endPacket();
-  Serial.println("Sent");
+  //Serial.println("Sent");
   return true;
 }
 
@@ -279,9 +295,16 @@ void loop()
   if (interruptflag)
   { 
     displaySignal();
-    if (receiveUDP())
-      sendEKGdata();
+    
+    swapBuffers();
+
     interruptflag = false;
   }
-  
+
+
+  if (receiveUDP() || readytosend)  // Start sending data when a connection is established
+  {
+    readytosend = true;
+    sendEKGdata();
+  }
 }

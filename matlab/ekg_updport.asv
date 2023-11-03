@@ -8,19 +8,18 @@
 clear 
 close all
 
-%% Initialisierung
+%% Initalisierung
 u = udpport("IPV4")                                             % Construct a byte-type udpport object.
 ekg_data = [];                                                  % Vektor fur EKG Daten
 packet_number = 1;
 
-% Aufnahmezeit. Ein packet entspricht 15 Sekunden Daten.
-packets = 3;
+% Auf
 
 writeline(u, "Bereit zu empfangen", "192.168.188.151", 420);    % Nachricht an ESP32 (IP-Adresse und den Port)
 %writeline(u, "Bereit zu empfangen", "192.168.0.60", 420);
 
 
-while (packet_number <= packets)                                       % Solange Auslesen bis mindestens 7500 Werte gelesen wurden (30s)
+while (packet_number < 3)                                       % Solange Auslesen bis mindestens 7500 Werte gelesen wurden (30s)
     
     while (u.NumBytesAvailable == 0)
     disp('Hallo ich warte du Hs');
