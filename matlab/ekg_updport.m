@@ -14,7 +14,7 @@ ekg_data = [];                                                  % Vektor fur EKG
 packet_number = 1;
 
 % Aufnahmezeit. Ein packet entspricht 15 Sekunden Daten.
-packets = 3;
+packets = 2;
 
 writeline(u, "Bereit zu empfangen", "192.168.188.151", 420);    % Nachricht an ESP32 (IP-Adresse und den Port)
 %writeline(u, "Bereit zu empfangen", "192.168.0.60", 420);
@@ -45,13 +45,14 @@ end
 %disp(ekg_data);
 %disp(data);                                             
 
-t=linspace(0,15*packet_number,length(ekg_data));
+t=linspace(0,15*packets,length(ekg_data));
 ekg_data=ekg_data/4095*3.3; % In Spannung umrechnen
 plot(t,ekg_data);
 xlabel("Zeit (s)");
 ylabel("Spannung (V)");
 title("EKG Daten ESP32");
-%save("EKG-Daten.mat","ekg_data");                               % Die gelesenen Daten werden abgespeichert
+axis([0, 30, 0, 3.3])
+save("EKG-Daten_tamara_final.mat","ekg_data");                               % Die gelesenen Daten werden abgespeichert
 
 flush(u, "output");                                             % Den Ausgabepuffer leeren 
 clear u;                                                        % Das udpport-Objekt löschen

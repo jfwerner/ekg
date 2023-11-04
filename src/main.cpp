@@ -114,8 +114,9 @@ void setup()
 {
   Serial.begin(115200);
   // Initialisierung PINS
-  //pinMode(33, INPUT);     // sets the digital pin 33 as input
-  // GPIO 17 auf High
+  pinMode(17, OUTPUT);     // GPIO 17 als Output
+  digitalWrite(17, true);         // High - Enable für EKG-Verstärker
+  
 
   // Display initialisieren
   display.init();
@@ -241,21 +242,21 @@ bool sendAnswer()
 
 bool swapBuffers()      // Setzt pointer zurück, sobald sie das Ende erreicht haben
 {
-  if (writeptr == &ekgBuffer[2*BUFFER_SIZE])
+  if (writeptr == &ekgBuffer[BUFFER_SIZE])
   {
     Serial.printf("\nWriteptr before Reset %d", (writeptr - ekgBuffer)/sizeof(uint16_t));
     Serial.printf("\nDisplayptr: %d ", (displayptr - ekgBuffer)/sizeof(uint16_t));
     writeptr = begin;
     Serial.println("\nReset writeptr\n");
   }
-  if (displayptr == &ekgBuffer[2*BUFFER_SIZE])    // Kann writeptr nicht überholen, weil er nur beim Interrupt aufgerufen wird
+  if (displayptr == &ekgBuffer[BUFFER_SIZE])    // Kann writeptr nicht überholen, weil er nur beim Interrupt aufgerufen wird
   {
     Serial.printf("\nDisplayptr before Reset %d", (displayptr-ekgBuffer)/sizeof(uint16_t));
     Serial.printf("\nWriteptr: %d", (writeptr-ekgBuffer)/sizeof(uint16_t));
     displayptr = begin;
     Serial.println("\nReset displayptr\n");
   }
-  if (sendptr == &ekgBuffer[2*BUFFER_SIZE])   // Check wird in der Sendefunktion gemacht
+  if (sendptr == &ekgBuffer[BUFFER_SIZE])   // Check wird in der Sendefunktion gemacht
   {
     
     Serial.printf("\nSendptr before Reset %d ", (sendptr-ekgBuffer)/sizeof(uint16_t));
