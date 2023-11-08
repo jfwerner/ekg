@@ -17,7 +17,8 @@ Beschreibung: Main
 #include "SSD1306Wire.h"
 #include <WiFiUdp.h>
 #include "WiFi.h"
-//#include <queue>          // Für Ringbuffer
+#include <queue>
+//#include <normal_distribution>
 #include "logo.h"         // HKA Logo
 // using namespace std;
 
@@ -29,28 +30,34 @@ int delayvalue = 0;                          // Index für wie viel Werte für d
 // Werte festlegen
 int samplingFreq = 250;                      // Abtastfrequenz ADC https://pubmed.ncbi.nlm.nih.gov/30109153/
 int displayTimeShown = 2;                    // Auf Display werden 2s an Daten angezeigt
+float rxvoltage;
+float lastrxvoltage;
+int lastHBtime = 0;
+int bpm = 0;
+float Rthreshold = 1.7;
+std::queue<float> diffBetween3HB;
+std::queue<float> diffBetweenHB;
 
-
-WiFiServer server(80);      // HTML Webserver
+//WiFiServer server(80);      // HTML Webserver
 #define UDP_PORT 420
 WiFiUDP UDP;
 char packet[255];
 
-//const char* ssid = "Loading...";
-//const char* password = "";
-const char* ssid = "FRITZ!Box 7590 VL";
-const char* password = "56616967766283031728";
+struct udpPacket
+{
+  uint8_t highByte;
+  uint8_t lowByte;
+  uint8_t dataPosition;
+};
 
-// ADC-Konfiguration
-#define ADC_PIN 33 // Pin für EKG-Signal
-//#define ADC_RESOLUTION 12 // 12-Bit-Auflösung
-//#define ADC_SAMPLES 1 // Ein Sample pro Abtastung
-//#define ADC_MAX_VALUE ((1 << ADC_RESOLUTION) - 1)
+const char* ssid = "Loading...";
+const char* password = "";
+//const char* ssid = "FRITZ!Box 7590 VL";
+//const char* password = "56616967766283031728";
 
-// GPIO-Pin zum Schreiben
-#define DAC_PIN 25
-
-float rxvoltage;
+// GPIO-PIN definieren
+#define ADC_PIN 33 // Pin für EKG-Signal (ADC-Konfiguration)
+#define DAC_PIN 25 // GPIO-Pin zum Schreiben
 
 SSD1306Wire display(0x3c, SDA, SCL);  // ADDRESS, SDA, SCL | 128x64 display https://github.com/ThingPulse/esp8266-oled-ssd1306
 
@@ -58,13 +65,6 @@ struct myPixel                              // Pixels for use with Display
 {
   int16_t x = 0;
   int16_t y = 0;
-};
-
-struct udpPacket
-{
-  uint8_t highByte;
-  uint8_t lowByte;
-  uint8_t dataPosition;
 };
 
 myPixel lastpx;
@@ -81,18 +81,29 @@ uint16_t ekgBuffer[BUFFER_SIZE];            // volatile ?
 uint16_t * begin = &ekgBuffer[0];
 uint16_t * middle = &ekgBuffer[BUFFER_SIZE/2];
 
-
 uint16_t * writeptr = begin;
 uint16_t * displayptr = begin;
 uint16_t * sendptr = begin;
-
-//bool readAwriteB;
+uint16_t * lastHBptr = begin;
 
 // Interrupt
 bool interruptflag = false;
 hw_timer_t * timer = NULL;
 bool readytosend = false;
 //portMUX_TYPE timerMUX = portMUX_INITIALIZER_UNLOCKED;
+
+// Filterkoeffizienten
+double alpha = 1 / samplingFreq;                                                 // 1 Hz = 2* 0.5Hz -> 50Hz +- 0.5Hz
+double b[3] = {1.0, -2.0 * cos(2.0 * PI * 50.0 / 1000.0), 1.0};                  // Nullstellen des Filters: b = [b0 b1 b2]
+double a[3] = {1.0 + alpha, -2.0 * cos(2.0 * PI * 50.0 / 1000.0), 1.0 - alpha};  // Pole des Filters: a = [a0 a1 a2]
+
+// Zwischenspeicher des Filters
+double Mem0 = 0; 
+double Mem1 = 0; 
+double Mem2 = 0; 
+
+double data_flt;
+ 
 
 void IRAM_ATTR readADC()                    // Interrupt Ram Attritube
 {
@@ -104,7 +115,7 @@ void IRAM_ATTR readADC()                    // Interrupt Ram Attritube
   delayvalue++;
   //digitalWrite(26, HIGH);                  // sets the digital pin 26 on
 
-  *writeptr = analogRead(ADC_PIN); // Read analog signal and write to buffer
+  *writeptr = analogRead(ADC_PIN);           // Read analog signal and write to buffer
   writeptr++;
   //interruptflag = false;                    // Reset interrupt flag
   //digitalWrite(26, LOW);                   // sets the digital pin 26 off
@@ -116,6 +127,10 @@ void setup()
   // Initialisierung PINS
   pinMode(17, OUTPUT);     // GPIO 17 als Output
   digitalWrite(17, true);         // High - Enable für EKG-Verstärker
+
+  diffBetween3HB.push(0);
+  diffBetween3HB.push(0);
+  diffBetween3HB.push(0);
   
 
   // Display initialisieren
@@ -174,14 +189,50 @@ void setup()
   Serial.println("End setup");
 }
 
+bool heartrateStuff()   // Iirgendwie 10bpm zu niedrig
+{
+  //Serial.printf("RXVoltage: %f\n", std::to_string(rxvoltage));
+  //if (displayptr > lastHBptr)
+  if (lastrxvoltage >= Rthreshold)
+  {
+    if (rxvoltage < Rthreshold)
+    {
+      // Stelle von neuem Herzschlag - letzten, * Zeitdauer von einer Messung zur nächsten in ms
+      /*float timesincelastHB = (displayptr - lastHBptr)/sizeof(uint16_t)*(1000/250);
+      Serial.println("TimesincelastHB");
+      Serial.println(timesincelastHB);*/
+      int rrInterval = (millis()-lastHBtime);
+      lastHBtime = millis();
+      bpm = (1000*60/rrInterval);   // 60s*Herzfrequenz = bpm
+      
+      /*
+      Serial.println("BPM");
+      Serial.println(bpm);
+      display.clear();
+      display.drawString(0,2, String(bpm));
+      display.display();*/
+
+      //lastHBptr = displayptr;
+      diffBetweenHB.push(rrInterval);
+      diffBetween3HB.push(rrInterval);
+      diffBetween3HB.pop();
+      //HRV = std::stddev(diffBetweenHB);
+      //HRV = 0;
+      lastrxvoltage = rxvoltage;
+      return true;
+    }
+  }
+  lastrxvoltage = rxvoltage;
+  return false;
+}
+
 bool displaySignal()
 {
-  rxvoltage = float(*displayptr)/4095*3.3; //ADC ist 12bit,
-  displayptr++;
+  rxvoltage = float(*displayptr)/4095*3.3; //ADC ist 12bit,  
+  heartrateStuff();
   if (delayvalue >= 5)      // Display every xth value
   {
     //uint16_t rxval = analogRead(ADC_PIN);
-
     displaypx.y = rxvoltage/3.3 * 64;   // Convert read data into display space
 
     display.setPixel(displaypx.x, displaypx.y);
@@ -195,12 +246,15 @@ bool displaySignal()
     if (displaypx.x == 128)             // Reset x coordinate to start of the display
     {
       display.clear();
+      display.drawString(0,2, String(bpm));
+      //display.drawString(0,15, String(HRV));
       lastpx.x = 0;
       displaypx.x = 0;
     }
     delayvalue = 0;
     return true;
   }
+  displayptr++;
   return false;
 }
 
@@ -240,7 +294,7 @@ bool sendAnswer()
   return false;
 }
 
-bool swapBuffers()      // Setzt pointer zurück, sobald sie das Ende erreicht haben
+bool swapBuffers()      // Setzt Pointer zurück, sobald sie das Ende erreicht haben
 {
   if (writeptr == &ekgBuffer[BUFFER_SIZE])
   {
@@ -269,6 +323,21 @@ bool swapBuffers()      // Setzt pointer zurück, sobald sie das Ende erreicht h
   return true;
 }
 
+/*
+double IIR_Notch_Filter(uint16_t * adcvalue)                                             // Filter-Funktion auf Eingangsignal: Infiinite Impulse Response (unendliche Impulsantwort)
+{
+  double y;
+    
+  Mem0 = adcvalue - a[1] * Mem1 - a[2] * Mem2;                                         // Berechnung von Mem0 
+  y = b[0] * Mem0 + b[1] * Mem1 + b[2] * Mem2;                                         // Ermittlung des gefilterten Werts
+  // Abspeichern der berechneten Werte
+  Mem2 = Mem1;
+  Mem1 = Mem0; 
+
+  return(y); 
+}*/
+
+
 bool sendEKGdata()
 {
   //UDP.parsePacket();
@@ -295,6 +364,7 @@ void loop()
 
   if (interruptflag)
   { 
+    //data_flt = IIR_Filter_Calc(writeptr); // gefilterten Sensorwert berechnen (Filter 2. Ordnung)
     displaySignal();
     
     swapBuffers();
