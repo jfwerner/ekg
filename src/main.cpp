@@ -422,6 +422,5 @@ void loop()
       sendptr = tmpSendptr2;
       sendEKGdata(true);
     }
-    
   }
 }

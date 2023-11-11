@@ -17,8 +17,9 @@ packet_number = 1;
 
 packets = 4;                                                        % Ein Paket entspricht 15 Sekunden Daten.
 
-writeline(u, "Bereit zu empfangen", "192.168.188.151", 420);   % Nachricht an ESP32 (IP-Adresse und den Port)
+%writeline(u, "Bereit zu empfangen", "192.168.188.151", 420);   % Nachricht an ESP32 (IP-Adresse und den Port)
 %writeline(u, "Bereit zu empfangen", "192.168.0.60", 420);
+writeline(u, "Bereit zu empfangen", "192.168.18.77", 420);
 
 while (packet_number <= packets)                                % Solange Auslesen bis gewollte Paketanzahl erreicht
     
