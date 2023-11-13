@@ -42,9 +42,9 @@ while (packet_number <= packets)                                % Solange Ausles
 
 end
 
-% Daten anzeigen                    
+% Daten anzeigen
 % disp(ekg_data);
-% disp(data);                                             
+% disp(data);
 
 t=linspace(0,15*packets/2,length(ekg_data_raw));
 ekg_data_raw=ekg_data_raw/4095*3.3;                            % ADC-Werte in Spannung umrechnen
@@ -63,8 +63,8 @@ ylabel("Spannung (V)");
 title('', 'Gefilterte Daten mit IIR-Notch-Filter');
 axis([0, 30, 0, 3.3])
 
-save("EKG-Daten_raw_johannes_4.mat","ekg_data_raw");           % Die gelesenen Daten werden abgespeichert
-save("EKG-Daten_IIR_johannes_4.mat","ekg_data_IIR");           % Die gelesenen Daten werden abgespeichert
+save("EKG-Daten_raw_sophie.mat","ekg_data_raw");           % Die gelesenen Daten werden abgespeichert
+save("EKG-Daten_IIR_sophie.mat","ekg_data_IIR");           % Die gelesenen Daten werden abgespeichert
 
 
 flush(u, "output");                                             % Den Ausgabepuffer leeren 

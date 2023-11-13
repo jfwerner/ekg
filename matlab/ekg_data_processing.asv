@@ -16,8 +16,7 @@ load("EKG-Daten_raw_johannes_2.mat");
 load("EKG-Daten_IIR_johannes_2.mat");
 %load("EKG-Daten_johannes_2.mat");
 
-ekg_data_raw = 3.3 - ekg_data_raw;
-ekg_data_IIR = 3.3 - ekg_data_IIR;
+
 
 %ekg_data_raw = ekg_data;
 
@@ -64,7 +63,7 @@ plot(t, ekg_data_raw);
 xlabel('Zeit in Sekunden');
 ylabel('Spannung in Volt');
 title('EKG-Signal', 'Rohdaten');
-axis([0, 30, 1, 3.3])
+axis([0, 30, 0, 3.3])
 grid;
 
 subplot(3, 1, 2)
@@ -72,7 +71,7 @@ plot(t, ekg_data_filt);
 title('', 'Gefiltert in Matlab');
 xlabel('Zeit in Sekunde');
 ylabel('Spannung in Volt');
-axis([0, 30, 1, 3.3])
+axis([0, 30, 0, 3.3])
 grid;
 
 subplot(3, 1, 3)
@@ -80,7 +79,7 @@ plot(t, ekg_data_IIR);
 title('', 'Gefiltert mit digitalem IIR-Notch-Filter');
 xlabel('Zeit in Sekunde');
 ylabel('Spannung in Volt');
-axis([0, 30, 1, 3.3])
+axis([0, 30, 0, 3.3])
 grid;
 
 %% Plot des Amplitudenspektrums
@@ -121,10 +120,10 @@ i = 1;                              % Index innere while-Schleife
 figure(3)
 % subplot (2, 1, 1)
 plot(t, ekg_data_filt);
-xlabel('Zeit in Sekunden');
+xlabel('Zeit in Sekunde');
 ylabel('Spannung in Volt');
 title('EKG-Signal mit R-Zacken-Detektion');
-axis([0, 30, 1, 3.3])
+axis([0, 30, 0, 3.3])
 hold on
 grid;
 

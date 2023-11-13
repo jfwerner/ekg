@@ -15,10 +15,8 @@ Beschreibung: Main
 #include <Arduino.h>
 //#include <Wire.h>       // Wird wohl seit 1.6.5 nicht mehr benötigt
 #include "SSD1306Wire.h"
-#include <WiFiUdp.h>
+//#include <WiFiUdp.h>
 #include "WiFi.h"
-#include <queue>
-#include <tuple>
 //#include <normal_distribution>
 #include "logo.h"         // HKA Logo
 // using namespace std;
@@ -36,8 +34,6 @@ float lastrxvoltage;
 unsigned long lastHBtime = 0;
 int bpm = 0;
 float Rthreshold = 1.7;
-std::queue<float> diffBetween3HB;
-std::queue<float> diffBetweenHB;
 
 #define EKG_DEMO false   // Funktioniert nur bei einer BUFFERSIZE 
 #if (EKG_DEMO)
@@ -96,7 +92,6 @@ bool readytosend = false;
 uint16_t * writeptr = begin;
 uint16_t * displayptr = begin;
 uint16_t * sendptr = begin;
-uint16_t * lastHBptr = begin;
 
 // Interrupt
 bool interruptflag = false;
